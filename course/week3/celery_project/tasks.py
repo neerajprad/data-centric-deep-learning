@@ -35,7 +35,7 @@ class PredictionTask(Task):
     return self.run(*args, **kwargs)
   
   def get_system(self):
-    system = None
+    system = DigitClassifierSystem.load_from_checkpoint(MODEL_PATH)
     # ================================
     # FILL ME OUT
     # 
@@ -87,9 +87,10 @@ def predict_single(self, data):
 
   # default (placeholder) values
   results = {'label': None, 'probs': None}
+  system = self.get_system()
 
   with torch.no_grad():
-    logits = None
+    logits = system.predict_step(im)
     # ================================
     # FILL ME OUT
     # 
@@ -109,7 +110,7 @@ def predict_single(self, data):
     label = torch.argmax(logits, dim=1)  # shape (1)
     label = label.item()                 # tensor -> integer
 
-    probs = None
+    probs = F.softmax(logits, dim=-1)
     # ================================
     # FILL ME OUT
     # 

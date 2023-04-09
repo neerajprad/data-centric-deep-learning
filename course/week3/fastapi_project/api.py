@@ -112,8 +112,6 @@ def predict(request: Request, body: InferenceInput):
   im = im.unsqueeze(0)
 
   with torch.no_grad():
-    logits = None
-
     # ================================
     # FILL ME OUT
     # 
@@ -134,6 +132,7 @@ def predict(request: Request, body: InferenceInput):
     # --
     # logits: torch.Tensor (shape: 1x10)
     # ================================
+    logits = system.predict_step(im)
 
     # To extract the label, just find the largest logit.
     label = torch.argmax(logits, dim=1)  # shape (1)
@@ -155,6 +154,7 @@ def predict(request: Request, body: InferenceInput):
     # --
     # probs: torch.Tensor (shape: 1x10)
     # ================================
+    probs = F.softmax(logits, dim=-1)
     probs = probs.squeeze(0)        # squeeze to (10) shape
     probs = probs.numpy().tolist()  # convert tensor to list
 

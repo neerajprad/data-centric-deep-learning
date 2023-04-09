@@ -131,8 +131,26 @@ class TrainIdentifyReview(FlowSpec):
     # https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.KFold.html
     kf = KFold(n_splits=3)    # create kfold splits
 
-    for train_index, test_index in kf.split(X):
-      probs_ = None
+    for train_index, test_index in kf.split(X):  
+      config = load_config(self.config_path)
+      system = SentimentClassifierSystem(config)    
+      checkpoint_callback = ModelCheckpoint(
+        dirpath = config.train.ckpt_dir,
+        monitor = 'test_loss',
+        mode = 'min',    # look for lowest `dev_loss`
+        verbose = True,
+      )
+      trainer = Trainer(
+        max_epochs = config.train.optimizer.max_epochs,
+        callbacks = [checkpoint_callback]
+      )
+      train_ds = TensorDataset(torch.Tensor(X[train_index]), torch.Tensor(y[train_index]))
+      test_ds = TensorDataset(torch.Tensor(X[test_index]), torch.Tensor(y[test_index]))
+      train_dl = DataLoader(train_ds, batch_size=config.train.optimizer.batch_size)
+      test_dl = DataLoader(test_ds, batch_size=config.train.optimizer.batch_size)
+      trainer.fit(system, train_dl)
+      preds = trainer.predict(system, test_dl)
+      probs_ = np.concatenate([p.numpy().squeeze(-1) for p in preds])
       # ===============================================
       # FILL ME OUT
       # 
@@ -196,7 +214,7 @@ class TrainIdentifyReview(FlowSpec):
     prob = np.stack([1 - prob, prob]).T
   
     # rank label indices by issues
-    ranked_label_issues = None
+    ranked_label_issues = find_label_issues(self.all_df.label, prob, return_indices_ranked_by='self_confidence')
     
     # =============================
     # FILL ME OUT
@@ -212,11 +230,13 @@ class TrainIdentifyReview(FlowSpec):
     # --
     # ranked_label_issues: List[int]
     # =============================
+    print(ranked_label_issues)
     assert ranked_label_issues is not None, "`ranked_label_issues` not defined."
 
     # save this to class
     self.issues = ranked_label_issues
-    print(f'{len(ranked_label_issues)} label issues found.')
+    print(f'{len(ranked_label_issues)} label issues found amongst {len(self.all_df)} labels.')
+    print(self.all_df.head())
 
     # overwrite label for all the entries in all_df
     for index in self.issues:
@@ -310,6 +330,9 @@ class TrainIdentifyReview(FlowSpec):
     # # ====================================
 
     # start from scratch
+    dm.train_dataset.data = self.all_df[:train_size]
+    dm.dev_dataset.data = self.all_df[train_size:train_size+dev_size]
+    dm.test_dataset.data = self.all_df[train_size+dev_size:]
     system = SentimentClassifierSystem(self.config)
     trainer = Trainer(
       max_epochs = self.config.train.optimizer.max_epochs)
